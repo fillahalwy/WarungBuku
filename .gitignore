@@ -1,0 +1,80 @@
+# ============================================================
+# PHP / General
+# ============================================================
+
+# Database connection config (if moved to separate file)
+koneksi.php
+
+# ============================================================
+# Uploaded Files
+# ============================================================
+
+# Product images uploaded through the admin panel
+assets/images/product/
+
+# ============================================================
+# OS & Editor Artifacts
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (PhpStorm, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================
+# Logs & Temp Files
+# ============================================================
+
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.cache
+
+# PHP error log
+php_errorlog
+
+# ============================================================
+# Dependency Managers (if ever added)
+# ============================================================
+
+/vendor/
+composer.lock
+node_modules/
+package-lock.json
+
+# ============================================================
+# Environment & Secrets
+# ============================================================
+
+.env
+.env.local
+.env.*.local
+config.local.php
