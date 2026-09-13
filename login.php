@@ -1,5 +1,5 @@
 <?php 
-include('koneksi.php'); 
+include('connection.php'); 
 session_start();
 
 // If already logged in, redirect to dashboard
@@ -74,18 +74,22 @@ if(isset($_SESSION['status_login']) && $_SESSION['status_login'] == true){
                         $username = mysqli_real_escape_string($conn, trim($_POST['username']));
                         $password = $_POST['password'];
                         
-                        $check = mysqli_query($conn, "SELECT * FROM admins WHERE username = '$username' AND password = '".MD5($password)."'");
-                        
-                        if(mysqli_num_rows($check) > 0){
-                            $admin = mysqli_fetch_object($check);
-                            $_SESSION['status_login'] = true;
-                            $_SESSION['global']       = $admin;
-                            $_SESSION['id']           = $admin->id;
+                        try {
+                            $check = mysqli_query($conn, "SELECT * FROM users WHERE username = '$username' AND password = '".MD5($password)."'");
                             
-                            echo "<script>window.location='dashboard.php';</script>";
-                            exit();
-                        } else { 
-                            $error_msg = 'Incorrect username or password. Please try again.';
+                            if($check && mysqli_num_rows($check) > 0){
+                                $admin = mysqli_fetch_object($check);
+                                $_SESSION['status_login'] = true;
+                                $_SESSION['global']       = $admin;
+                                $_SESSION['id']           = $admin->id;
+                                
+                                echo "<script>window.location='dashboard.php';</script>";
+                                exit();
+                            } else { 
+                                $error_msg = 'Incorrect username or password. Please try again.';
+                            }
+                        } catch (mysqli_sql_exception $e) {
+                            $error_msg = 'Database error: ' . $e->getMessage();
                         }
                     }
                 ?>

@@ -1,5 +1,5 @@
 <?php 
-include('koneksi.php');
+include('connection.php');
 session_start();
 if(!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true){
    echo "<script> window.location='login.php' </script>";

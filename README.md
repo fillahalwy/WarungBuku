@@ -51,7 +51,7 @@ This will automatically create the `db_marketplace` database with all tables and
 
 ### 3. Configure the database connection
 
-Open `koneksi.php` and adjust the credentials if needed:
+Open `connection.php` and adjust the credentials if needed:
 
 ```php
 $conn = mysqli_connect('localhost', 'root', '', 'db_marketplace');
@@ -69,11 +69,11 @@ $conn = mysqli_connect('localhost', 'root', '', 'db_marketplace');
 Start Laragon (or your web server), then open your browser:
 
 ```
-http://localhost/project-marketplace/
+http://localhost/WarungBuku/
 ```
 
-- **Public storefront:** `http://localhost/project-marketplace/index.php`
-- **Admin panel:** `http://localhost/project-marketplace/login.php`
+- **Public storefront:** `http://localhost/WarungBuku/index.php`
+- **Admin panel:** `http://localhost/WarungBuku/login.php`
 
 ### 5. Default admin credentials
 
@@ -88,12 +88,13 @@ http://localhost/project-marketplace/
 
 ## 🗄️ Database Schema
 
-Three tables are used:
+Four tables are used:
 
 ```
-admins        — Administrator accounts
+users         — Administrator/User accounts
 categories    — Product categories
-products      — Book/product listings (FK → categories.id, CASCADE)
+products      — General marketplace products
+books         — Book product catalog (UUID, ISBN, Title, Author, Publisher, Year, Category, Price, Stock, Description, Timestamps)
 ```
 
 See [`database/db_schema.sql`](database/db_schema.sql) for the full schema.

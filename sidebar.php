@@ -21,7 +21,7 @@
                 <span class="d-none d-md-inline fw-semibold"><?= htmlspecialchars($_SESSION['global']->name ?? 'Admin') ?></span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow" aria-labelledby="dropdownUser">
-                <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person me-2"></i> Profil Saya</a></li>
+                <li><a class="dropdown-item" href="profile.php"><i class="bi bi-person me-2"></i> Profil Saya</a></li>
                 <li><a class="dropdown-item" href="index.php" target="_blank"><i class="bi bi-globe me-2"></i> Lihat Toko</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
@@ -51,13 +51,16 @@
         
         <!-- Master Data Section -->
         <small class="text-uppercase text-muted px-2 pt-3 pb-1 fw-bold fs-7" style="font-size: 11px;">MASTER DATA</small>
-        <a href="data-kategori.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'data-kategori.php') ? 'active-sidebar' : '' ?>">
+        <a href="products.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'products.php') ? 'active-sidebar' : '' ?>">
+            <i class="bi bi-book-half me-2"></i> Data Produk
+        </a>
+        <a href="categories.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'categories.php') ? 'active-sidebar' : '' ?>">
             <i class="bi bi-tags me-2"></i> Data Kategori
         </a>
 
         <!-- Pengaturan & Lainnya -->
         <small class="text-uppercase text-muted px-2 pt-3 pb-1 fw-bold fs-7" style="font-size: 11px;">PENGATURAN</small>
-        <a href="profil.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'profil.php') ? 'active-sidebar' : '' ?>">
+        <a href="profile.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'profile.php') ? 'active-sidebar' : '' ?>">
             <i class="bi bi-person-circle me-2"></i> Profil Admin
         </a>
         <a href="index.php" target="_blank" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1">
