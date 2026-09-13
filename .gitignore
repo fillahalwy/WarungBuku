@@ -4,6 +4,7 @@
 
 # Database connection config (if moved to separate file)
 koneksi.php
+connection.php
 
 # ============================================================
 # Uploaded Files
