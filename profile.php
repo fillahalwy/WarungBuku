@@ -1,8 +1,16 @@
 <?php
 include("connection.php");
-session_start();
-if(!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true){
-    echo "<script>window.location='login.php'</script>";
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Validasi Sesi & Role Admin
+if (!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true) {
+    header("Location: login.php");
+    exit();
+}
+if (($_SESSION['role'] ?? '') !== 'admin') {
+    header("Location: customer-profile.php");
     exit();
 }
 

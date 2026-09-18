@@ -17,11 +17,16 @@ DROP TABLE IF EXISTS `users`;
 -- 1. users
 -- ----------------------------------------------------------
 CREATE TABLE `users` (
-  `id`       INT(11)      NOT NULL AUTO_INCREMENT,
-  `name`     VARCHAR(100) NOT NULL,
-  `username` VARCHAR(50)  NOT NULL UNIQUE,
-  `password` VARCHAR(255) NOT NULL,
-  `phone`    VARCHAR(20)  DEFAULT NULL,
+  `id`         INT(11)                                NOT NULL AUTO_INCREMENT,
+  `name`       VARCHAR(100)                           NOT NULL,
+  `username`   VARCHAR(50)                            NOT NULL UNIQUE,
+  `password`   VARCHAR(255)                           NOT NULL,
+  `phone`      VARCHAR(20)                            DEFAULT NULL,
+  `email`      VARCHAR(100)                           DEFAULT NULL,
+  `address`    TEXT                                   DEFAULT NULL,
+  `role`       ENUM('admin', 'customer')              NOT NULL DEFAULT 'customer',
+  `created_at` DATETIME                               NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME                               NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -73,10 +78,51 @@ CREATE TABLE `books` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------
+-- 5. orders (Transaction / Orders Management)
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `orders` (
+  `id`               VARCHAR(50)    NOT NULL,
+  `customer_name`    VARCHAR(100)   NOT NULL,
+  `customer_phone`   VARCHAR(25)    NOT NULL,
+  `customer_email`   VARCHAR(100)   DEFAULT NULL,
+  `customer_address` TEXT           NOT NULL,
+  `payment_method`   VARCHAR(50)    NOT NULL,
+  `payment_channel`  VARCHAR(50)    DEFAULT NULL,
+  `total_amount`     DECIMAL(12,2)  NOT NULL DEFAULT 0.00,
+  `status`           ENUM('pending', 'paid', 'processing', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+  `notes`            TEXT           DEFAULT NULL,
+  `created_at`       DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------
+-- 6. order_items (Items in Order)
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `order_items` (
+  `id`         INT(11)        NOT NULL AUTO_INCREMENT,
+  `order_id`   VARCHAR(50)    NOT NULL,
+  `book_id`    CHAR(36)       NOT NULL,
+  `book_title` VARCHAR(255)   NOT NULL,
+  `price`      DECIMAL(12,2)  NOT NULL,
+  `quantity`   INT(11)        NOT NULL DEFAULT 1,
+  `subtotal`   DECIMAL(12,2)  NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_order` (`order_id`),
+  CONSTRAINT `fk_order`
+    FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------
 -- Seed Data
 -- ----------------------------------------------------------
+INSERT INTO `users` (`name`, `username`, `password`, `phone`, `role`) VALUES
+  ('Administrator', 'admin', MD5('admin'), '081234567890', 'admin');
+
 INSERT INTO `users` (`name`, `username`, `password`, `phone`) VALUES
-  ('Administrator', 'admin', MD5('admin'), '081234567890');
+  ('Ilham', 'ilham', MD5('ilham'), '080987654321');
+
 
 INSERT INTO `categories` (`name`) VALUES
   ('Pendidikan & Sejarah'),

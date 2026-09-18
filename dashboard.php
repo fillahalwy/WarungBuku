@@ -1,531 +1,529 @@
 <?php 
 include('connection.php');
-session_start();
-if(!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true){
-   echo "<script> window.location='login.php' </script>";
-   exit();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-// ----------------------------------------------------
-// PRODUCT CRUD HANDLERS
-// ----------------------------------------------------
-
-// 1. ADD PRODUCT
-if(isset($_POST['add_product'])){
-    $name        = mysqli_real_escape_string($conn, trim($_POST['name']));
-    $category_id = mysqli_real_escape_string($conn, $_POST['category_id']);
-    $price       = mysqli_real_escape_string($conn, $_POST['price']);
-    $description = mysqli_real_escape_string($conn, trim($_POST['description']));
-
-    $filename        = $_FILES['image']['name'];
-    $tmp_name        = $_FILES['image']['tmp_name'];
-    $ext_parts       = explode('.', $filename);
-    $ext             = strtolower(end($ext_parts));
-    $allowed_types   = ['jpg', 'jpeg', 'png', 'webp'];
-    
-    if(in_array($ext, $allowed_types)){
-        $image_filename = 'product_' . time() . '.' . $ext;
-        $target_dir     = 'assets/images/product/';
-
-        if(!file_exists($target_dir)){
-            mkdir($target_dir, 0777, true);
-        }
-
-        if(move_uploaded_file($tmp_name, $target_dir . $image_filename)){
-            $insert = mysqli_query($conn, "INSERT INTO products (name, category_id, price, image, description) 
-                                           VALUES ('$name', '$category_id', '$price', '$image_filename', '$description')");
-            if($insert){
-                $_SESSION['msg_success'] = "New product has been added successfully.";
-            } else {
-                $_SESSION['msg_error'] = "Failed to save product to database: " . mysqli_error($conn);
-            }
-        } else {
-            $_SESSION['msg_error'] = "Failed to upload product image.";
-        }
-    } else {
-        $_SESSION['msg_error'] = "Unsupported file format. Please use JPG, JPEG, PNG, or WEBP.";
-    }
-    header("Location: dashboard.php");
+// Validasi Sesi & Role Admin
+if (!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true) {
+    header("Location: login.php");
     exit();
 }
-
-// 2. EDIT PRODUCT
-if(isset($_POST['edit_product'])){
-    $id          = mysqli_real_escape_string($conn, $_POST['product_id']);
-    $name        = mysqli_real_escape_string($conn, trim($_POST['name']));
-    $category_id = mysqli_real_escape_string($conn, $_POST['category_id']);
-    $price       = mysqli_real_escape_string($conn, $_POST['price']);
-    $description = mysqli_real_escape_string($conn, trim($_POST['description']));
-    $old_image   = mysqli_real_escape_string($conn, $_POST['old_image']);
-
-    $filename = $_FILES['image']['name'];
-    $tmp_name = $_FILES['image']['tmp_name'];
-
-    // Replace image if a new file is uploaded
-    if(!empty($filename)){
-        $ext_parts     = explode('.', $filename);
-        $ext           = strtolower(end($ext_parts));
-        $allowed_types = ['jpg', 'jpeg', 'png', 'webp'];
-        
-        if(in_array($ext, $allowed_types)){
-            $image_filename = 'product_' . time() . '.' . $ext;
-            $target_dir     = 'assets/images/product/';
-
-            if(move_uploaded_file($tmp_name, $target_dir . $image_filename)){
-                // Delete old image if it exists
-                if(!empty($old_image) && file_exists($target_dir . $old_image)){
-                    unlink($target_dir . $old_image);
-                }
-                $final_image = $image_filename;
-            } else {
-                $final_image = $old_image;
-            }
-        } else {
-            $_SESSION['msg_error'] = "Unsupported image format.";
-            header("Location: dashboard.php");
-            exit();
-        }
-    } else {
-        $final_image = $old_image;
-    }
-
-    $update = mysqli_query($conn, "UPDATE products SET 
-        name        = '$name',
-        category_id = '$category_id',
-        price       = '$price',
-        image       = '$final_image',
-        description = '$description'
-        WHERE id = '$id'");
-
-    if($update){
-        $_SESSION['msg_success'] = "Product updated successfully.";
-    } else {
-        $_SESSION['msg_error'] = "Failed to update product: " . mysqli_error($conn);
-    }
-    header("Location: dashboard.php");
-    exit();
-}
-
-// 3. DELETE PRODUCT
-if(isset($_GET['delete_product'])){
-    $id = mysqli_real_escape_string($conn, $_GET['delete_product']);
-    
-    // Fetch image to delete from filesystem
-    $get_img  = mysqli_query($conn, "SELECT image FROM products WHERE id = '$id'");
-    $img_data = mysqli_fetch_assoc($get_img);
-    if(!empty($img_data['image']) && file_exists('assets/images/product/' . $img_data['image'])){
-        unlink('assets/images/product/' . $img_data['image']);
-    }
-
-    $delete = mysqli_query($conn, "DELETE FROM products WHERE id = '$id'");
-    if($delete){
-        $_SESSION['msg_success'] = "Product deleted successfully.";
-    } else {
-        $_SESSION['msg_error'] = "Failed to delete product: " . mysqli_error($conn);
-    }
-    header("Location: dashboard.php");
+if (($_SESSION['role'] ?? '') !== 'admin') {
+    header("Location: index.php");
     exit();
 }
 
 // ----------------------------------------------------
-// PAGINATION & FILTER CONFIG
+// STATISTIK & RINGKASAN DATA
 // ----------------------------------------------------
-$limit           = 5;
-$page            = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-if ($page < 1) { $page = 1; }
-$offset          = ($page > 1) ? ($page * $limit) - $limit : 0;
-
-$search          = isset($_GET['search'])   ? mysqli_real_escape_string($conn, trim($_GET['search']))   : '';
-$category_filter = isset($_GET['category']) ? mysqli_real_escape_string($conn, $_GET['category'])       : '';
-
-$where_clause = " WHERE 1=1 ";
-if ($search != '') {
-    $where_clause .= " AND p.name LIKE '%$search%' ";
-}
-if ($category_filter != '') {
-    $where_clause .= " AND p.category_id = '$category_filter' ";
-}
-
-// Count totals
-$total_records  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM products p $where_clause"))['total'] ?? 0;
-$total_pages    = ceil($total_records / $limit);
-
-// Stats
-$count_products   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM products"))['total']   ?? 0;
+$admin_name       = $_SESSION['global']->name ?? 'Admin';
+$count_products   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM books"))['total']   ?? 0;
 $count_categories = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM categories"))['total'] ?? 0;
-$admin_name       = isset($_SESSION['global']->name) ? $_SESSION['global']->name : 'Admin';
+$count_orders     = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM orders"))['total']     ?? 0;
+$count_users      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM users"))['total']      ?? 0;
+$count_customers  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM users WHERE role = 'customer'"))['total'] ?? 0;
+$count_vouchers   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM vouchers WHERE is_active = 1"))['total'] ?? 0;
+$total_revenue    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total_amount), 0) AS total FROM orders WHERE status IN ('paid', 'processing', 'completed')"))['total'] ?? 0;
 
-// Fetch products
-$query_products = "SELECT p.*, c.name AS category_name 
-                   FROM products p 
-                   LEFT JOIN categories c ON p.category_id = c.id
-                   $where_clause 
-                   ORDER BY p.id DESC 
-                   LIMIT $offset, $limit";
-$products = mysqli_query($conn, $query_products);
+// Status Pesanan Breakdown
+$order_pending    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM orders WHERE status = 'pending'"))['total'] ?? 0;
+$order_paid       = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM orders WHERE status = 'paid'"))['total'] ?? 0;
+$order_processing = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM orders WHERE status = 'processing'"))['total'] ?? 0;
+$order_completed  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM orders WHERE status = 'completed'"))['total'] ?? 0;
+
+// ----------------------------------------------------
+// QUERY DATA AKTIVITAS TERBARU & PERFORMA
+// ----------------------------------------------------
+// 1. Transaksi Terbaru (Recent Orders)
+$recent_orders = mysqli_query($conn, "SELECT * FROM orders ORDER BY created_at DESC LIMIT 6");
+
+// 2. Buku dengan Stok Menipis (Stok <= 10)
+$low_stock_books = mysqli_query($conn, "SELECT * FROM books WHERE stock <= 10 ORDER BY stock ASC, title ASC LIMIT 5");
+
+// 3. Voucher Aktif & Kuota Penggunaan
+$active_vouchers = mysqli_query($conn, "SELECT * FROM vouchers WHERE is_active = 1 ORDER BY used_count DESC, id DESC LIMIT 4");
+
+// 4. Pengguna Terdaftar Terbaru
+$recent_users = mysqli_query($conn, "SELECT * FROM users ORDER BY id DESC LIMIT 5");
 ?>
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/x-icon" href="assets/book.ico" />
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet" />
-        <link href="css/styles.css" rel="stylesheet" />
-        <title>Dashboard Admin | WarungBuku</title>
-        <style>
-            .stat-card {
-                border: none;
-                border-radius: 12px;
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
-            }
-            .stat-card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
-            }
-            .card-custom {
-                border: none;
-                border-radius: 12px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            }
-            .card-header-custom {
-                border-top-left-radius: 12px !important;
-                border-top-right-radius: 12px !important;
-            }
-            .product-img-thumb {
-                width: 50px;
-                height: 50px;
-                object-fit: cover;
-                border-radius: 6px;
-                border: 1px solid #dee2e6;
-            }
-        </style>
-    </head>
-    <body class="bg-light d-flex flex-column min-vh-100">
-        <!-- Sidebar Navigation -->
-        <?php include('sidebar.php'); ?>
-        
-        <!-- Header / Banner Welcome -->
-        <header class="bg-dark text-white py-4 shadow-sm" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
-            <div class="container-fluid px-4">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                    <div>
-                        <h1 class="h3 fw-bold mb-1">Welcome, <?= htmlspecialchars($admin_name) ?>! 👋</h1>
-                        <p class="lead text-white-50 fs-6 mb-0">Manage your product catalog and store information directly from this Dashboard.</p>
-                    </div>
-                    <div>
-                        <button class="btn btn-primary px-4 py-2 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAddProduct">
-                            <i class="bi bi-plus-circle me-1"></i> Add New Product
-                        </button>
-                    </div>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="assets/book.ico" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet" />
+    <link href="css/styles.css" rel="stylesheet" />
+    <title>Dashboard Admin | WarungBuku</title>
+    <style>
+        :root {
+            --brand-primary: #0B88D3;
+        }
+        .stat-card {
+            border: none;
+            border-radius: 14px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+        }
+        .card-custom {
+            border: none;
+            border-radius: 14px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            background: #ffffff;
+        }
+        .card-header-custom {
+            border-top-left-radius: 14px !important;
+            border-top-right-radius: 14px !important;
+        }
+        .quick-action-btn {
+            transition: all 0.2s ease;
+            text-decoration: none;
+            border-radius: 12px;
+        }
+        .quick-action-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+        .user-avatar-small {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+
+    <!-- Sidebar Navigation -->
+    <?php include('sidebar.php'); ?>
+    
+    <!-- Header / Banner Welcome -->
+    <header class="bg-dark text-white py-4 shadow-sm" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+        <div class="container-fluid px-4">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div>
+                    <h1 class="h3 fw-bold mb-1">Selamat Datang, <?= htmlspecialchars($admin_name) ?>! 👋</h1>
+                    <p class="text-white-50 fs-6 mb-0">Pantau performa penjualan, pesanan masuk, ketersediaan stok buku, dan voucher toko buku Anda.</p>
                 </div>
-            </div>
-        </header>
-
-        <!-- Section Main Content -->
-        <section class="py-4">
-            <div class="container-fluid px-4">
-                
-                <!-- Stat Cards -->
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6 col-lg-6">
-                        <div class="card stat-card bg-white shadow-sm p-3">
-                            <div class="d-flex align-items-center">
-                                <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary me-3">
-                                    <i class="bi bi-box-seam fs-2"></i>
-                                </div>
-                                <div>
-                                    <div class="text-muted small fw-semibold">TOTAL PRODUCTS</div>
-                                    <div class="fs-3 fw-bold"><?= $count_products ?> Items</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-lg-6">
-                        <div class="card stat-card bg-white shadow-sm p-3">
-                            <div class="d-flex align-items-center">
-                                <div class="rounded-circle bg-info bg-opacity-10 p-3 text-info me-3">
-                                    <i class="bi bi-tags fs-2"></i>
-                                </div>
-                                <div>
-                                    <div class="text-muted small fw-semibold">TOTAL CATEGORIES</div>
-                                    <div class="fs-3 fw-bold"><?= $count_categories ?> Categories</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Alert Messages -->
-                <?php if(isset($_SESSION['msg_success'])): ?>
-                    <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
-                        <i class="bi bi-check-circle-fill me-2"></i><?= $_SESSION['msg_success']; ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                    <?php unset($_SESSION['msg_success']); ?>
-                <?php endif; ?>
-
-                <?php if(isset($_SESSION['msg_error'])): ?>
-                    <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i><?= $_SESSION['msg_error']; ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                    <?php unset($_SESSION['msg_error']); ?>
-                <?php endif; ?>
-
-                <!-- Product Inventory Table -->
-                <div class="card card-custom mb-5">
-                    <div class="card-header card-header-custom bg-dark text-white py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
-                        <div class="fw-bold fs-5 mb-0"><i class="bi bi-table me-2"></i>Product Inventory</div>
-                        <div class="d-flex gap-2 align-items-center">
-                            <span class="badge bg-primary rounded-pill px-3 py-2">Total: <?= $total_records ?> Records</span>
-                            <button class="btn btn-sm btn-outline-light rounded-circle" data-bs-toggle="modal" data-bs-target="#modalAddProduct" title="Add Product">
-                                <i class="bi bi-plus-lg"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body p-4">
-                        
-                        <!-- Search & Filter Form -->
-                        <form action="" method="get" class="row g-3 mb-4">
-                            <div class="col-md-5">
-                                <div class="input-group">
-                                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                                    <input type="text" name="search" class="form-control" placeholder="Search product name..." value="<?= htmlspecialchars($search) ?>">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <select name="category" class="form-select">
-                                    <option value="">-- All Categories --</option>
-                                    <?php 
-                                        $categories_list = mysqli_query($conn, "SELECT * FROM categories ORDER BY name ASC");
-                                        while($cat = mysqli_fetch_array($categories_list)){
-                                            $selected = ($category_filter == $cat['id']) ? 'selected' : '';
-                                            echo "<option value='".$cat['id']."' $selected>" . htmlspecialchars($cat['name']) . "</option>";
-                                        }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="col-md-3 d-flex gap-2">
-                                <button type="submit" class="btn btn-dark w-100"><i class="bi bi-funnel me-1"></i> Filter</button>
-                                <?php if($search != '' || $category_filter != ''): ?>
-                                    <a href="dashboard.php" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Reset</a>
-                                <?php endif; ?>
-                            </div>
-                        </form>
-
-                        <!-- Products Table -->
-                        <div class="table-responsive">
-                            <table class="table table-hover table-striped align-middle border">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th width="50" class="text-center">No.</th>
-                                        <th width="80" class="text-center">Image</th>
-                                        <th>Product Name</th>
-                                        <th>Category</th>
-                                        <th>Price</th>
-                                        <th width="120" class="text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php 
-                                        if(mysqli_num_rows($products) == 0){
-                                            echo '<tr><td colspan="6" class="text-center py-4 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2"></i>No products found.</td></tr>';
-                                        } else {
-                                            $row_num = $offset + 1;
-                                            while($p = mysqli_fetch_array($products)){
-                                                $img_src = !empty($p['image']) && file_exists('assets/images/product/' . $p['image']) 
-                                                    ? 'assets/images/product/' . $p['image'] 
-                                                    : 'https://dummyimage.com/100x100/dee2e6/6c757d.jpg&text=No+Image';
-                                    ?>
-                                    <tr>
-                                        <td class="text-center fw-semibold"><?= $row_num++ ?></td>
-                                        <td class="text-center">
-                                            <img src="<?= $img_src ?>" alt="<?= htmlspecialchars($p['name']) ?>" class="product-img-thumb shadow-sm">
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold text-dark"><?= htmlspecialchars($p['name']) ?></div>
-                                            <?php if(!empty($p['description'])): ?>
-                                                <small class="text-muted text-truncate d-inline-block" style="max-width: 250px;"><?= htmlspecialchars($p['description']) ?></small>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-info text-dark px-2 py-1"><?= htmlspecialchars($p['category_name'] ?? 'Uncategorized') ?></span>
-                                        </td>
-                                        <td class="fw-bold text-success">
-                                            Rp <?= number_format($p['price'], 0, ',', '.') ?>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                <button class="btn btn-outline-primary" title="Edit Product" data-bs-toggle="modal" data-bs-target="#modalEditProduct<?= $p['id'] ?>">
-                                                    <i class="bi bi-pencil-square"></i>
-                                                </button>
-                                                <a href="dashboard.php?delete_product=<?= $p['id'] ?>" onclick="return confirm('Are you sure you want to delete this product?')" class="btn btn-outline-danger" title="Delete Product">
-                                                    <i class="bi bi-trash"></i>
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-
-                                    <!-- EDIT PRODUCT MODAL -->
-                                    <div class="modal fade" id="modalEditProduct<?= $p['id'] ?>" tabindex="-1" aria-hidden="true">
-                                        <div class="modal-dialog modal-lg">
-                                            <div class="modal-content">
-                                                <form action="" method="post" enctype="multipart/form-data">
-                                                    <div class="modal-header bg-dark text-white">
-                                                        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Product</h5>
-                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <input type="hidden" name="product_id" value="<?= $p['id'] ?>">
-                                                        <input type="hidden" name="old_image" value="<?= $p['image'] ?>">
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>
-                                                            <input type="text" name="name" class="form-control" value="<?= htmlspecialchars($p['name']) ?>" required>
-                                                        </div>
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-semibold">Category <span class="text-danger">*</span></label>
-                                                            <select class="form-select" name="category_id" required>
-                                                                <?php
-                                                                    $cat_opts = mysqli_query($conn, "SELECT * FROM categories ORDER BY name ASC");
-                                                                    while($co = mysqli_fetch_array($cat_opts)){
-                                                                        $sel = ($co['id'] == $p['category_id']) ? 'selected' : '';
-                                                                        echo "<option value='".$co['id']."' $sel>" . htmlspecialchars($co['name']) . "</option>";
-                                                                    }
-                                                                ?>
-                                                            </select>
-                                                        </div>
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-semibold">Price (Rp) <span class="text-danger">*</span></label>
-                                                            <div class="input-group">
-                                                                <span class="input-group-text">Rp</span>
-                                                                <input type="number" name="price" class="form-control" min="0" value="<?= $p['price'] ?>" required>
-                                                            </div>
-                                                        </div>
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-semibold">Product Image</label>
-                                                            <div class="d-flex align-items-center gap-3 mb-2">
-                                                                <img src="<?= $img_src ?>" width="60" height="60" class="product-img-thumb">
-                                                                <small class="text-muted">Current image: <?= htmlspecialchars($p['image'] ?? 'None') ?></small>
-                                                            </div>
-                                                            <input type="file" name="image" class="form-control" accept="image/*">
-                                                            <div class="form-text">Leave empty to keep the current image.</div>
-                                                        </div>
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-semibold">Description</label>
-                                                            <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($p['description']) ?></textarea>
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                        <button type="submit" name="edit_product" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <?php 
-                                            }
-                                        } 
-                                    ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Pagination -->
-                        <?php if($total_pages > 1): ?>
-                        <nav aria-label="Product Pagination" class="mt-4">
-                            <ul class="pagination justify-content-center">
-                                <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                                    <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&category=<?= urlencode($category_filter) ?>">&laquo; Previous</a>
-                                </li>
-                                <?php for($i = 1; $i <= $total_pages; $i++): ?>
-                                    <li class="page-item <?= ($page == $i) ? 'active' : '' ?>">
-                                        <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&category=<?= urlencode($category_filter) ?>"><?= $i ?></a>
-                                    </li>
-                                <?php endfor; ?>
-                                <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                                    <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&category=<?= urlencode($category_filter) ?>">Next &raquo;</a>
-                                </li>
-                            </ul>
-                        </nav>
-                        <?php endif; ?>
-
-                    </div>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- ADD PRODUCT MODAL -->
-        <div class="modal fade" id="modalAddProduct" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <form action="" method="post" enctype="multipart/form-data">
-                        <div class="modal-header bg-dark text-white">
-                            <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add New Product</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>
-                                <input type="text" name="name" class="form-control" placeholder="Enter product or book title..." required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Category <span class="text-danger">*</span></label>
-                                <select class="form-select" name="category_id" required>
-                                    <option value="" disabled selected>--- Select Category ---</option>
-                                    <?php
-                                        $cat_opts2 = mysqli_query($conn, "SELECT * FROM categories ORDER BY name ASC");
-                                        while($co2 = mysqli_fetch_array($cat_opts2)){
-                                            echo "<option value='".$co2['id']."'>" . htmlspecialchars($co2['name']) . "</option>";
-                                        }
-                                    ?>
-                                </select>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Price (Rp) <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text">Rp</span>
-                                    <input type="number" name="price" class="form-control" min="0" placeholder="e.g. 50000" required>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Product Image <span class="text-danger">*</span></label>
-                                <input type="file" name="image" class="form-control" accept="image/*" required>
-                                <div class="form-text">Allowed formats: .jpg, .jpeg, .png, .webp</div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Description</label>
-                                <textarea name="description" class="form-control" rows="3" placeholder="Enter a detailed product description..."></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" name="add_product" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Product</button>
-                        </div>
-                    </form>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <a href="products.php" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" style="background-color: #0B88D3; border: none;">
+                        <i class="bi bi-plus-lg me-1"></i> Data Produk
+                    </a>
+                    <a href="orders.php" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                        <i class="bi bi-cart-check me-1"></i> Transaksi
+                    </a>
+                    <a href="index.php" target="_blank" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                        <i class="bi bi-globe me-1"></i> Lihat Toko
+                    </a>
                 </div>
             </div>
         </div>
+    </header>
 
-        <!-- Footer-->
-        <footer class="py-4 bg-dark mt-auto">
-            <div class="container text-center text-white-50">
-                <small>&copy; <?= date('Y') ?> WarungBuku Admin Panel. All Rights Reserved.</small>
+    <!-- Section Main Content -->
+    <main class="py-4 flex-grow-1">
+        <div class="container-fluid px-4">
+            
+            <!-- 1. KPI Summary Cards Grid -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card stat-card bg-white shadow-sm p-3 h-100 border-start border-4 border-primary">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary me-2">
+                                <i class="bi bi-book fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-semibold" style="font-size: 11px;">TOTAL PRODUK</div>
+                                <div class="fs-5 fw-bold text-dark"><?= $count_products ?> <small class="text-muted fs-7" style="font-size: 11px;">Buku</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card stat-card bg-white shadow-sm p-3 h-100 border-start border-4 border-info">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-info bg-opacity-10 p-2 text-info me-2">
+                                <i class="bi bi-tags fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-semibold" style="font-size: 11px;">KATEGORI</div>
+                                <div class="fs-5 fw-bold text-dark"><?= $count_categories ?> <small class="text-muted fs-7" style="font-size: 11px;">Kategori</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card stat-card bg-white shadow-sm p-3 h-100 border-start border-4 border-secondary">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-secondary bg-opacity-10 p-2 text-dark me-2">
+                                <i class="bi bi-people fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-semibold" style="font-size: 11px;">PENGGUNA</div>
+                                <div class="fs-5 fw-bold text-dark"><?= $count_users ?> <small class="text-muted fs-7" style="font-size: 11px;">Akun</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card stat-card bg-white shadow-sm p-3 h-100 border-start border-4 border-warning">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-warning bg-opacity-10 p-2 text-warning me-2">
+                                <i class="bi bi-ticket-perforated fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-semibold" style="font-size: 11px;">VOUCHER</div>
+                                <div class="fs-5 fw-bold text-dark"><?= $count_vouchers ?> <small class="text-muted fs-7" style="font-size: 11px;">Aktif</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card stat-card bg-white shadow-sm p-3 h-100 border-start border-4 border-warning">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-warning bg-opacity-10 p-2 text-warning me-2">
+                                <i class="bi bi-receipt fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-semibold" style="font-size: 11px;">TRANSAKSI</div>
+                                <div class="fs-5 fw-bold text-dark"><?= $count_orders ?> <small class="text-muted fs-7" style="font-size: 11px;">Pesanan</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="card stat-card bg-white shadow-sm p-3 h-100 border-start border-4 border-success">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success me-2">
+                                <i class="bi bi-cash-stack fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small fw-semibold" style="font-size: 11px;">TOTAL PENDAPATAN</div>
+                                <div class="fw-bold text-success" style="font-size: 13px;">Rp <?= number_format($total_revenue, 0, ',', '.') ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </footer>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
+
+            <!-- 2. Status Transaksi Bar -->
+            <div class="card card-custom p-3 mb-4">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-dark small"><i class="bi bi-funnel text-primary me-1"></i>Status Pesanan Terkini:</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <a href="orders.php?status=pending" class="badge bg-warning text-dark text-decoration-none px-3 py-2 rounded-pill">
+                            <i class="bi bi-clock me-1"></i> Menunggu Bayar (<?= $order_pending ?>)
+                        </a>
+                        <a href="orders.php?status=paid" class="badge bg-success text-decoration-none px-3 py-2 rounded-pill">
+                            <i class="bi bi-check-circle me-1"></i> Lunas (<?= $order_paid ?>)
+                        </a>
+                        <a href="orders.php?status=processing" class="badge bg-info text-decoration-none px-3 py-2 rounded-pill">
+                            <i class="bi bi-box-seam me-1"></i> Diproses (<?= $order_processing ?>)
+                        </a>
+                        <a href="orders.php?status=completed" class="badge bg-primary text-decoration-none px-3 py-2 rounded-pill">
+                            <i class="bi bi-patch-check me-1"></i> Selesai (<?= $order_completed ?>)
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Row 1: Transaksi Terbaru & Peringatan Stok Menipis -->
+            <div class="row g-4 mb-4">
+                
+                <!-- Kolom Transaksi Terbaru -->
+                <div class="col-lg-8">
+                    <div class="card card-custom h-100">
+                        <div class="card-header card-header-custom bg-dark text-white py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div class="fw-bold fs-6 mb-0">
+                                <i class="bi bi-cart-check me-2"></i>Transaksi Pesanan Terbaru
+                            </div>
+                            <a href="orders.php" class="btn btn-outline-light btn-sm rounded-pill px-3" style="font-size: 12px;">
+                                Lihat Semua Transaksi <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light small text-muted">
+                                        <tr>
+                                            <th class="ps-4">No Invoice</th>
+                                            <th>Pembeli</th>
+                                            <th>Metode Bayar</th>
+                                            <th class="text-end">Total</th>
+                                            <th class="text-center">Status</th>
+                                            <th class="text-center pe-4">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if ($recent_orders && mysqli_num_rows($recent_orders) > 0): ?>
+                                            <?php while ($ord = mysqli_fetch_assoc($recent_orders)): ?>
+                                                <?php
+                                                    $st = $ord['status'];
+                                                    $st_badge = '<span class="badge bg-secondary">Unknown</span>';
+                                                    if ($st === 'pending') $st_badge = '<span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pending</span>';
+                                                    elseif ($st === 'paid') $st_badge = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Lunas</span>';
+                                                    elseif ($st === 'processing') $st_badge = '<span class="badge bg-info"><i class="bi bi-box-seam me-1"></i>Diproses</span>';
+                                                    elseif ($st === 'completed') $st_badge = '<span class="badge bg-primary"><i class="bi bi-patch-check me-1"></i>Selesai</span>';
+                                                    elseif ($st === 'cancelled') $st_badge = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Batal</span>';
+                                                ?>
+                                                <tr>
+                                                    <td class="ps-4">
+                                                        <span class="fw-bold font-monospace text-primary small"><?= htmlspecialchars($ord['id']) ?></span>
+                                                        <div class="text-muted" style="font-size: 11px;"><?= date('d/m/Y H:i', strtotime($ord['created_at'])) ?></div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-semibold text-dark small"><?= htmlspecialchars($ord['customer_name']) ?></div>
+                                                        <small class="text-muted" style="font-size: 11px;"><?= htmlspecialchars($ord['customer_phone']) ?></small>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-light text-dark border small">
+                                                            <?= strtoupper($ord['payment_method']) ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-end fw-bold text-primary small">
+                                                        Rp <?= number_format($ord['total_amount'], 0, ',', '.') ?>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <?= $st_badge ?>
+                                                    </td>
+                                                    <td class="text-center pe-4">
+                                                        <a href="orders.php?search=<?= urlencode($ord['id']) ?>" class="btn btn-outline-dark btn-sm rounded-pill px-2" title="Kelola di Halaman Transaksi" style="font-size: 11px;">
+                                                            <i class="bi bi-eye"></i> Detail
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            <?php endwhile; ?>
+                                        <?php else: ?>
+                                            <tr>
+                                                <td colspan="6" class="text-center py-4 text-muted small">
+                                                    <i class="bi bi-inbox fs-3 d-block mb-1"></i>
+                                                    Belum ada transaksi pesanan yang tercatat.
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kolom Peringatan Stok Buku Menipis -->
+                <div class="col-lg-4">
+                    <div class="card card-custom h-100">
+                        <div class="card-header card-header-custom bg-dark text-white py-3 px-4 d-flex align-items-center justify-content-between">
+                            <div class="fw-bold fs-6 mb-0">
+                                <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Peringatan Stok Menipis
+                            </div>
+                            <a href="products.php" class="text-white-50 text-decoration-none small" style="font-size: 11px;">Kelola Stok</a>
+                        </div>
+                        <div class="card-body p-3">
+                            <p class="text-muted small mb-3">Daftar buku dengan sisa stok $\le 10$ eksemplar atau habis yang perlu segera di-restock:</p>
+                            
+                            <div class="d-flex flex-column gap-2">
+                                <?php if ($low_stock_books && mysqli_num_rows($low_stock_books) > 0): ?>
+                                    <?php while ($b = mysqli_fetch_assoc($low_stock_books)): ?>
+                                        <?php 
+                                            $stk = (int)$b['stock'];
+                                            $badge_stk = ($stk == 0) ? 'bg-danger text-white' : (($stk <= 5) ? 'bg-warning text-dark' : 'bg-secondary text-white');
+                                        ?>
+                                        <div class="p-2 border rounded-3 bg-light d-flex align-items-center justify-content-between gap-2">
+                                            <div class="text-truncate" style="max-width: 190px;">
+                                                <div class="fw-semibold text-dark small text-truncate" title="<?= htmlspecialchars($b['title']) ?>">
+                                                    <?= htmlspecialchars($b['title']) ?>
+                                                </div>
+                                                <small class="text-muted" style="font-size: 11px;"><?= htmlspecialchars($b['category']) ?></small>
+                                            </div>
+                                            <div class="text-end flex-shrink-0">
+                                                <span class="badge <?= $badge_stk ?> px-2 py-1 small">
+                                                    <?= ($stk == 0) ? 'Habis (0)' : "Stok: $stk" ?>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <div class="text-center py-4 text-success small">
+                                        <i class="bi bi-check-circle fs-3 d-block mb-1"></i>
+                                        Seluruh stok buku dalam kondisi aman!
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="mt-3 pt-3 border-top text-center">
+                                <a href="products.php" class="btn btn-outline-dark btn-sm rounded-pill w-100" style="font-size: 12px;">
+                                    <i class="bi bi-book-half me-1"></i> Buka Katalog Data Produk
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 4. Row 2: Voucher Aktif & Pengguna Terbaru -->
+            <div class="row g-4 mb-4">
+                
+                <!-- Kolom Voucher Promo Toko -->
+                <div class="col-lg-6">
+                    <div class="card card-custom h-100">
+                        <div class="card-header card-header-custom bg-dark text-white py-3 px-4 d-flex align-items-center justify-content-between">
+                            <div class="fw-bold fs-6 mb-0">
+                                <i class="bi bi-ticket-perforated me-2"></i>Voucher Promo Toko Aktif
+                            </div>
+                            <a href="vouchers.php" class="btn btn-outline-light btn-sm rounded-pill px-3" style="font-size: 12px;">
+                                Kelola Voucher <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="d-flex flex-column gap-2">
+                                <?php if ($active_vouchers && mysqli_num_rows($active_vouchers) > 0): ?>
+                                    <?php while ($v = mysqli_fetch_assoc($active_vouchers)): ?>
+                                        <div class="p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between gap-2">
+                                            <div>
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <span class="badge bg-primary font-monospace" style="background-color: #0B88D3 !important;"><?= htmlspecialchars($v['code']) ?></span>
+                                                    <span class="fw-bold text-dark small"><?= htmlspecialchars($v['name']) ?></span>
+                                                </div>
+                                                <div class="text-muted small" style="font-size: 11px;">
+                                                    <?php if ($v['discount_type'] === 'percent'): ?>
+                                                        Diskon <strong><?= (float)$v['discount_value'] ?>%</strong> (Maks. Rp <?= number_format($v['max_discount'], 0, ',', '.') ?>)
+                                                    <?php else: ?>
+                                                        Potongan <strong>Rp <?= number_format($v['discount_value'], 0, ',', '.') ?></strong>
+                                                    <?php endif; ?>
+                                                    &bull; Min. Belanja Rp <?= number_format($v['min_spend'], 0, ',', '.') ?>
+                                                </div>
+                                            </div>
+                                            <div class="text-end flex-shrink-0">
+                                                <span class="badge bg-success rounded-pill px-2 py-1 small">Terpakai: <?= $v['used_count'] ?>/<?= $v['quota'] ?></span>
+                                                <div class="text-muted" style="font-size: 10px; margin-top: 3px;">Exp: <?= !empty($v['expiry_date']) ? date('d/m/Y', strtotime($v['expiry_date'])) : 'Selamanya' ?></div>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <div class="text-center py-4 text-muted small">
+                                        <i class="bi bi-ticket-perforated fs-3 d-block mb-1"></i>
+                                        Belum ada voucher promo yang aktif.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kolom Pengguna Terdaftar Terbaru -->
+                <div class="col-lg-6">
+                    <div class="card card-custom h-100">
+                        <div class="card-header card-header-custom bg-dark text-white py-3 px-4 d-flex align-items-center justify-content-between">
+                            <div class="fw-bold fs-6 mb-0">
+                                <i class="bi bi-people me-2"></i>Pengguna Terdaftar Terbaru
+                            </div>
+                            <a href="users.php" class="btn btn-outline-light btn-sm rounded-pill px-3" style="font-size: 12px;">
+                                Kelola Pengguna <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="d-flex flex-column gap-2">
+                                <?php if ($recent_users && mysqli_num_rows($recent_users) > 0): ?>
+                                    <?php while ($u = mysqli_fetch_assoc($recent_users)): ?>
+                                        <div class="p-2 border rounded-3 bg-light d-flex align-items-center justify-content-between gap-2">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="user-avatar-small bg-primary text-white" style="background-color: <?= ($u['role'] === 'admin') ? '#212529' : '#0B88D3' ?> !important;">
+                                                    <?= strtoupper(substr($u['name'] ?? 'U', 0, 1)) ?>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold text-dark small mb-0"><?= htmlspecialchars($u['name']) ?></div>
+                                                    <small class="text-muted" style="font-size: 11px;">@<?= htmlspecialchars($u['username']) ?> &bull; <?= htmlspecialchars($u['phone'] ?? '-') ?></small>
+                                                </div>
+                                            </div>
+                                            <div class="text-end flex-shrink-0">
+                                                <?php if ($u['role'] === 'admin'): ?>
+                                                    <span class="badge bg-dark rounded-pill px-2 py-1" style="font-size: 10px;">ADMIN</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-primary rounded-pill px-2 py-1" style="background-color: #0B88D3 !important; font-size: 10px;">PELANGGAN</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <div class="text-center py-4 text-muted small">
+                                        Belum ada pengguna terdaftar.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 5. Quick Actions Shortcut Grid -->
+            <div class="card card-custom p-4 mb-4">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>Menu Pintas Navigasi Cepat Admin</h6>
+                <div class="row g-3">
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <a href="products.php" class="quick-action-btn card bg-light p-3 text-center text-dark h-100 border">
+                            <i class="bi bi-book-half fs-3 text-primary mb-1"></i>
+                            <span class="small fw-semibold">Kelola Produk</span>
+                        </a>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <a href="categories.php" class="quick-action-btn card bg-light p-3 text-center text-dark h-100 border">
+                            <i class="bi bi-tags fs-3 text-info mb-1"></i>
+                            <span class="small fw-semibold">Data Kategori</span>
+                        </a>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <a href="orders.php" class="quick-action-btn card bg-light p-3 text-center text-dark h-100 border">
+                            <i class="bi bi-cart-check fs-3 text-success mb-1"></i>
+                            <span class="small fw-semibold">Data Transaksi</span>
+                        </a>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <a href="vouchers.php" class="quick-action-btn card bg-light p-3 text-center text-dark h-100 border">
+                            <i class="bi bi-ticket-perforated fs-3 text-warning mb-1"></i>
+                            <span class="small fw-semibold">Voucher & Diskon</span>
+                        </a>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <a href="users.php" class="quick-action-btn card bg-light p-3 text-center text-dark h-100 border">
+                            <i class="bi bi-people fs-3 text-secondary mb-1"></i>
+                            <span class="small fw-semibold">Data Pengguna</span>
+                        </a>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <a href="profile.php" class="quick-action-btn card bg-light p-3 text-center text-dark h-100 border">
+                            <i class="bi bi-person-gear fs-3 text-dark mb-1"></i>
+                            <span class="small fw-semibold">Profil Admin</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer-->
+    <footer class="py-4 bg-dark mt-auto text-white">
+        <div class="container text-center text-white-50 small">
+            <div>&copy; <?= date('Y') ?> <strong>WarungBuku</strong> Admin Panel. All Rights Reserved.</div>
+        </div>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
 </html>

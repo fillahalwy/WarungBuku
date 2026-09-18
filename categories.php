@@ -1,8 +1,16 @@
 <?php 
 include("connection.php");
-session_start();
-if(!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true){
-    echo "<script>window.location='login.php'</script>";
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Validasi Sesi & Role Admin
+if (!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true) {
+    header("Location: login.php");
+    exit();
+}
+if (($_SESSION['role'] ?? '') !== 'admin') {
+    header("Location: index.php");
     exit();
 }
 
@@ -166,32 +174,6 @@ $categories = mysqli_query($conn, $query);
                                             </div>
                                         </td>
                                     </tr>
-
-                                    <!-- Edit Category Modal -->
-                                    <div class="modal fade" id="modalEditCategory<?= $cat['id'] ?>" tabindex="-1" aria-hidden="true">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <form action="" method="post">
-                                                    <div class="modal-header bg-dark text-white">
-                                                        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Category</h5>
-                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <input type="hidden" name="category_id" value="<?= $cat['id'] ?>">
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-semibold">Category Name</label>
-                                                            <input type="text" name="name" class="form-control" value="<?= htmlspecialchars($cat['name']) ?>" required>
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                        <button type="submit" name="edit_category" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     <?php 
                                             }
                                         } 
@@ -205,8 +187,42 @@ $categories = mysqli_query($conn, $query);
             </div>
         </section>
 
+        <!-- Edit Category Modals (Rendered outside table) -->
+        <?php 
+            if(mysqli_num_rows($categories) > 0){
+                mysqli_data_seek($categories, 0);
+                while($cat = mysqli_fetch_array($categories)){
+        ?>
+        <div class="modal fade" id="modalEditCategory<?= $cat['id'] ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form action="" method="post">
+                        <div class="modal-header bg-dark text-white">
+                            <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Category</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" name="category_id" value="<?= $cat['id'] ?>">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Category Name</label>
+                                <input type="text" name="name" class="form-control" value="<?= htmlspecialchars($cat['name']) ?>" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" name="edit_category" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <?php 
+                }
+            }
+        ?>
+
         <!-- Add Category Modal -->
-        <div class="modal fade" id="modalAddCategory" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="modalAddCategory" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <form action="" method="post">

@@ -1,10 +1,16 @@
 <?php 
 include("connection.php");
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// Validasi Sesi Login
-if(!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true){
-    echo "<script>window.location='login.php'</script>";
+// Validasi Sesi & Role Admin
+if (!isset($_SESSION['status_login']) || $_SESSION['status_login'] != true) {
+    header("Location: login.php");
+    exit();
+}
+if (($_SESSION['role'] ?? '') !== 'admin') {
+    header("Location: index.php");
     exit();
 }
 
@@ -544,17 +550,24 @@ while($row = mysqli_fetch_assoc($categories_query)){
                             </thead>
                             <tbody>
                                 <?php 
-                                    if(mysqli_num_rows($books) == 0){
-                                        echo '<tr>
-                                                <td colspan="10" class="text-center py-5 text-muted">
-                                                    <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
-                                                    <div class="fw-bold fs-6">Tidak ada data buku yang ditemukan</div>
-                                                    <small>Silakan tambahkan data buku baru atau sesuaikan filter pencarian.</small>
-                                                </td>
-                                              </tr>';
-                                    } else {
-                                        $no = $offset + 1;
-                                        while($book = mysqli_fetch_array($books)){
+                                    $books_list = [];
+                                    if(mysqli_num_rows($books) > 0) {
+                                        while($book = mysqli_fetch_array($books)) {
+                                            $books_list[] = $book;
+                                        }
+                                    }
+                                ?>
+                                <?php if(empty($books_list)): ?>
+                                    <tr>
+                                        <td colspan="10" class="text-center py-5 text-muted">
+                                            <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
+                                            <div class="fw-bold fs-6">Tidak ada data buku yang ditemukan</div>
+                                            <small>Silakan tambahkan data buku baru atau sesuaikan filter pencarian.</small>
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php $no = $offset + 1; foreach($books_list as $book): ?>
+                                        <?php
                                             // Tentukan badge status stok
                                             $stok_val = (int)$book['stock'];
                                             if($stok_val == 0){
@@ -564,163 +577,163 @@ while($row = mysqli_fetch_assoc($categories_query)){
                                             } else {
                                                 $stock_badge = '<span class="badge bg-success rounded-pill px-2 py-1"><i class="bi bi-check-circle me-1"></i>' . $stok_val . ' Eks</span>';
                                             }
+                                        ?>
+                                        <tr>
+                                            <td class="text-center fw-semibold text-muted"><?= $no++ ?></td>
+                                            <td class="text-center">
+                                                <?php if(!empty($book['image']) && file_exists('assets/images/book/' . $book['image'])): ?>
+                                                    <img src="assets/images/book/<?= htmlspecialchars($book['image']) ?>" alt="Cover <?= htmlspecialchars($book['title']) ?>" class="book-cover-thumb" data-bs-toggle="modal" data-bs-target="#modalDetailBook<?= $book['id'] ?>" style="cursor: pointer;">
+                                                <?php else: ?>
+                                                    <div class="book-cover-placeholder mx-auto" title="Cover tidak tersedia">
+                                                        <i class="bi bi-journal-bookmark"></i>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="badge-isbn" title="ISBN Buku">
+                                                    <i class="bi bi-upc-scan text-primary"></i>
+                                                    <?= htmlspecialchars($book['isbn']) ?>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold text-dark fs-6"><?= htmlspecialchars($book['title']) ?></div>
+                                                <?php if(!empty($book['description'])): ?>
+                                                    <small class="text-muted text-truncate d-block" style="max-width: 250px;">
+                                                        <?= htmlspecialchars(substr($book['description'], 0, 75)) . (strlen($book['description']) > 75 ? '...' : '') ?>
+                                                    </small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold text-dark"><i class="bi bi-person me-1 text-secondary"></i><?= htmlspecialchars($book['author']) ?></div>
+                                                <small class="text-muted"><i class="bi bi-building me-1"></i><?= htmlspecialchars($book['publisher']) ?></small>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-light text-dark border"><?= $book['publication_year'] ?></span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1 rounded">
+                                                    <i class="bi bi-tag-fill me-1"></i><?= htmlspecialchars($book['category']) ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                <span class="price-text">Rp <?= number_format($book['price'], 0, ',', '.') ?></span>
+                                            </td>
+                                            <td class="text-center">
+                                                <?= $stock_badge ?>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <!-- Tombol Detail -->
+                                                    <button class="btn btn-outline-info" title="Lihat Detail Buku" data-bs-toggle="modal" data-bs-target="#modalDetailBook<?= $book['id'] ?>">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    <!-- Tombol Edit -->
+                                                    <button class="btn btn-outline-primary" title="Ubah Data Buku" data-bs-toggle="modal" data-bs-target="#modalEditBook<?= $book['id'] ?>">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </button>
+                                                    <!-- Tombol Hapus -->
+                                                    <a href="products.php?delete_book=<?= $book['id'] ?>" onclick="return confirm('Apakah Anda yakin ingin menghapus buku \'<?= addslashes(htmlspecialchars($book['title'])) ?>\'? Tindakan ini tidak dapat dibatalkan.')" class="btn btn-outline-danger" title="Hapus Buku">
+                                                        <i class="bi bi-trash"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
 
-                                            // Formatted price untuk modal edit
-                                            $formatted_price_edit = number_format($book['price'], 0, ',', '.');
-                                ?>
-                                <tr>
-                                    <td class="text-center fw-semibold text-muted"><?= $no++ ?></td>
-                                    <td class="text-center">
-                                        <?php if(!empty($book['image']) && file_exists('assets/images/book/' . $book['image'])): ?>
-                                            <img src="assets/images/book/<?= htmlspecialchars($book['image']) ?>" alt="Cover <?= htmlspecialchars($book['title']) ?>" class="book-cover-thumb" data-bs-toggle="modal" data-bs-target="#modalDetailBook<?= $book['id'] ?>" style="cursor: pointer;">
-                                        <?php else: ?>
-                                            <div class="book-cover-placeholder mx-auto" title="Cover tidak tersedia">
-                                                <i class="bi bi-journal-bookmark"></i>
-                                            </div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <div class="badge-isbn" title="ISBN Buku">
-                                            <i class="bi bi-upc-scan text-primary"></i>
-                                            <?= htmlspecialchars($book['isbn']) ?>
+                    <!-- Modals Detail & Edit Buku (Rendered Outside Table) -->
+                    <?php if(!empty($books_list)): ?>
+                        <?php foreach($books_list as $book): ?>
+                            <?php $formatted_price_edit = number_format($book['price'], 0, ',', '.'); ?>
+                            <!-- MODAL DETAIL BUKU -->
+                            <div class="modal fade" id="modalDetailBook<?= $book['id'] ?>" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered modal-lg">
+                                    <div class="modal-content border-0 shadow">
+                                        <div class="modal-header bg-dark text-white">
+                                            <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>Detail Informasi Buku</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <div class="fw-bold text-dark fs-6"><?= htmlspecialchars($book['title']) ?></div>
-                                        <?php if(!empty($book['description'])): ?>
-                                            <small class="text-muted text-truncate d-block" style="max-width: 250px;">
-                                                <?= htmlspecialchars(substr($book['description'], 0, 75)) . (strlen($book['description']) > 75 ? '...' : '') ?>
-                                            </small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <div class="fw-semibold text-dark"><i class="bi bi-person me-1 text-secondary"></i><?= htmlspecialchars($book['author']) ?></div>
-                                        <small class="text-muted"><i class="bi bi-building me-1"></i><?= htmlspecialchars($book['publisher']) ?></small>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-light text-dark border"><?= $book['publication_year'] ?></span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1 rounded">
-                                            <i class="bi bi-tag-fill me-1"></i><?= htmlspecialchars($book['category']) ?>
-                                        </span>
-                                    </td>
-                                    <td class="text-end">
-                                        <span class="price-text">Rp <?= number_format($book['price'], 0, ',', '.') ?></span>
-                                    </td>
-                                    <td class="text-center">
-                                        <?= $stock_badge ?>
-                                    </td>
-                                    <td class="text-center">
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <!-- Tombol Detail -->
-                                            <button class="btn btn-outline-info" title="Lihat Detail Buku" data-bs-toggle="modal" data-bs-target="#modalDetailBook<?= $book['id'] ?>">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            <!-- Tombol Edit -->
-                                            <button class="btn btn-outline-primary" title="Ubah Data Buku" data-bs-toggle="modal" data-bs-target="#modalEditBook<?= $book['id'] ?>">
-                                                <i class="bi bi-pencil-square"></i>
-                                            </button>
-                                            <!-- Tombol Hapus -->
-                                            <a href="products.php?delete_book=<?= $book['id'] ?>" onclick="return confirm('Apakah Anda yakin ingin menghapus buku \'<?= addslashes(htmlspecialchars($book['title'])) ?>\'? Tindakan ini tidak dapat dibatalkan.')" class="btn btn-outline-danger" title="Hapus Buku">
-                                                <i class="bi bi-trash"></i>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                <!-- ======================================================= -->
-                                <!-- MODAL DETAIL BUKU -->
-                                <!-- ======================================================= -->
-                                <div class="modal fade" id="modalDetailBook<?= $book['id'] ?>" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered modal-lg">
-                                        <div class="modal-content border-0 shadow">
-                                            <div class="modal-header bg-dark text-white">
-                                                <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>Detail Informasi Buku</h5>
-                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body p-4">
-                                                <div class="row g-4">
-                                                    <!-- Cover Buku di Modal Detail -->
-                                                    <div class="col-md-4 text-center">
-                                                        <?php if(!empty($book['image']) && file_exists('assets/images/book/' . $book['image'])): ?>
-                                                            <img src="assets/images/book/<?= htmlspecialchars($book['image']) ?>" alt="Cover <?= htmlspecialchars($book['title']) ?>" class="book-cover-modal mb-2">
-                                                        <?php else: ?>
-                                                            <div class="book-cover-placeholder w-100 mb-2 py-5" style="height: 240px;">
-                                                                <div class="text-center">
-                                                                    <i class="bi bi-image fs-1 text-muted d-block mb-1"></i>
-                                                                    <span class="small text-muted">Belum ada cover</span>
-                                                                </div>
+                                        <div class="modal-body p-4">
+                                            <div class="row g-4">
+                                                <!-- Cover Buku di Modal Detail -->
+                                                <div class="col-md-4 text-center">
+                                                    <?php if(!empty($book['image']) && file_exists('assets/images/book/' . $book['image'])): ?>
+                                                        <img src="assets/images/book/<?= htmlspecialchars($book['image']) ?>" alt="Cover <?= htmlspecialchars($book['title']) ?>" class="book-cover-modal mb-2">
+                                                    <?php else: ?>
+                                                        <div class="book-cover-placeholder w-100 mb-2 py-5" style="height: 240px;">
+                                                            <div class="text-center">
+                                                                <i class="bi bi-image fs-1 text-muted d-block mb-1"></i>
+                                                                <span class="small text-muted">Belum ada cover</span>
                                                             </div>
-                                                        <?php endif; ?>
-                                                        <span class="badge-isbn w-100 justify-content-center py-2"><i class="bi bi-upc-scan me-1"></i><?= htmlspecialchars($book['isbn']) ?></span>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <span class="badge bg-light text-dark border d-block py-2">
+                                                        <i class="bi bi-upc-scan me-1 text-primary"></i> <?= htmlspecialchars($book['isbn']) ?>
+                                                    </span>
+                                                </div>
+                                                <!-- Detail Informasi -->
+                                                <div class="col-md-8">
+                                                    <h4 class="fw-bold text-dark mb-2"><?= htmlspecialchars($book['title']) ?></h4>
+                                                    <div class="mb-3">
+                                                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1 me-1">
+                                                            <i class="bi bi-tag-fill me-1"></i><?= htmlspecialchars($book['category']) ?>
+                                                        </span>
+                                                        <span class="badge bg-light text-dark border">
+                                                            <i class="bi bi-calendar3 me-1"></i>Tahun <?= $book['publication_year'] ?>
+                                                        </span>
                                                     </div>
 
-                                                    <div class="col-md-8">
-                                                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                                                            <span class="badge bg-primary px-3 py-2"><i class="bi bi-tag-fill me-1"></i><?= htmlspecialchars($book['category']) ?></span>
-                                                            <div class="fs-4 fw-bold text-primary">Rp <?= number_format($book['price'], 0, ',', '.') ?></div>
-                                                        </div>
+                                                    <table class="table table-sm table-borderless mb-3">
+                                                        <tr>
+                                                            <td class="text-muted" style="width: 140px;">Penulis</td>
+                                                            <td class="fw-semibold">: <?= htmlspecialchars($book['author']) ?></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="text-muted">Penerbit</td>
+                                                            <td class="fw-semibold">: <?= htmlspecialchars($book['publisher']) ?></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="text-muted">Harga Jual</td>
+                                                            <td class="fw-bold text-primary fs-5">: Rp <?= number_format($book['price'], 0, ',', '.') ?></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="text-muted">Stok Tersedia</td>
+                                                            <td class="fw-bold">: <?= (int)$book['stock'] ?> Eksemplar</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="text-muted">Tanggal Ditambahkan</td>
+                                                            <td>: <?= date('d F Y, H:i', strtotime($book['created_at'])) ?> WIB</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="text-muted">Terakhir Diperbarui</td>
+                                                            <td>: <?= date('d F Y, H:i', strtotime($book['updated_at'])) ?> WIB</td>
+                                                        </tr>
+                                                    </table>
 
-                                                        <h4 class="fw-bold text-dark mb-3"><?= htmlspecialchars($book['title']) ?></h4>
-
-                                                        <div class="row g-2 mb-3">
-                                                            <div class="col-sm-6">
-                                                                <small class="text-muted d-block">Penulis</small>
-                                                                <div class="fw-semibold text-dark"><i class="bi bi-person-fill text-secondary me-1"></i><?= htmlspecialchars($book['author']) ?></div>
-                                                            </div>
-                                                            <div class="col-sm-6">
-                                                                <small class="text-muted d-block">Penerbit</small>
-                                                                <div class="fw-semibold text-dark"><i class="bi bi-building text-secondary me-1"></i><?= htmlspecialchars($book['publisher']) ?></div>
-                                                            </div>
-                                                            <div class="col-sm-6 mt-2">
-                                                                <small class="text-muted d-block">Tahun Terbit</small>
-                                                                <div class="fw-semibold text-dark"><i class="bi bi-calendar3 text-secondary me-1"></i><?= $book['publication_year'] ?></div>
-                                                            </div>
-                                                            <div class="col-sm-6 mt-2">
-                                                                <small class="text-muted d-block">Status Stok</small>
-                                                                <div><?= $stock_badge ?> <span class="ms-1 small text-muted">(<?= $book['stock'] ?> unit)</span></div>
-                                                            </div>
-                                                        </div>
-
-                                                        <small class="text-muted d-block mb-1">Deskripsi / Sinopsis Buku</small>
-                                                        <div class="p-3 bg-light rounded border text-secondary small" style="line-height: 1.6; max-height: 150px; overflow-y: auto;">
-                                                            <?= !empty($book['description']) ? nl2br(htmlspecialchars($book['description'])) : '<em class="text-muted">Tidak ada deskripsi tersedia.</em>' ?>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="col-12 border-top pt-3">
-                                                        <div class="row text-muted small">
-                                                            <div class="col-md-6 mb-1">
-                                                                <strong>ID Buku (UUID):</strong><br>
-                                                                <span class="uuid-badge"><?= $book['id'] ?></span>
-                                                            </div>
-                                                            <div class="col-md-3 mb-1">
-                                                                <strong>Dibuat Pada:</strong><br>
-                                                                <span><?= date('d M Y, H:i', strtotime($book['created_at'])) ?></span>
-                                                            </div>
-                                                            <div class="col-md-3 mb-1">
-                                                                <strong>Diperbarui:</strong><br>
-                                                                <span><?= date('d M Y, H:i', strtotime($book['updated_at'])) ?></span>
-                                                            </div>
-                                                        </div>
+                                                    <div class="bg-light p-3 rounded border">
+                                                        <h6 class="fw-bold text-dark mb-2 small text-uppercase"><i class="bi bi-text-paragraph me-1"></i>Deskripsi & Sinopsis</h6>
+                                                        <p class="text-muted mb-0 small" style="white-space: pre-line;">
+                                                            <?= !empty($book['description']) ? htmlspecialchars($book['description']) : '<em>Tidak ada deskripsi untuk buku ini.</em>' ?>
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div class="modal-footer bg-light">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                                                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#modalEditBook<?= $book['id'] ?>">
-                                                    <i class="bi bi-pencil-square me-1"></i> Ubah Data
-                                                </button>
-                                            </div>
+                                        </div>
+                                        <div class="modal-footer bg-light">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#modalEditBook<?= $book['id'] ?>">
+                                                <i class="bi bi-pencil-square me-1"></i> Ubah Data
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <!-- ======================================================= -->
-                                <!-- MODAL EDIT BUKU -->
-                                <!-- ======================================================= -->
-                                <div class="modal fade" id="modalEditBook<?= $book['id'] ?>" tabindex="-1" aria-hidden="true">
+                            <!-- MODAL EDIT BUKU -->
+                            <div class="modal fade" id="modalEditBook<?= $book['id'] ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
                                     <div class="modal-dialog modal-dialog-centered modal-lg">
                                         <div class="modal-content border-0 shadow">
                                             <form action="" method="post" enctype="multipart/form-data">
@@ -813,14 +826,9 @@ while($row = mysqli_fetch_assoc($categories_query)){
                                         </div>
                                     </div>
                                 </div>
-
-                                <?php 
-                                        }
-                                    } 
-                                ?>
-                            </tbody>
-                        </table>
-                    </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
 
                     <!-- Paginasi Maksimal 10 Produk Per Halaman -->
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-4">
@@ -863,7 +871,7 @@ while($row = mysqli_fetch_assoc($categories_query)){
     <!-- ======================================================= -->
     <!-- MODAL TAMBAH BUKU BARU -->
     <!-- ======================================================= -->
-    <div class="modal fade" id="modalAddBook" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="modalAddBook" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 shadow">
                 <form action="" method="post" enctype="multipart/form-data">

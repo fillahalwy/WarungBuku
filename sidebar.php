@@ -57,6 +57,18 @@
         <a href="categories.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'categories.php') ? 'active-sidebar' : '' ?>">
             <i class="bi bi-tags me-2"></i> Data Kategori
         </a>
+        <a href="users.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'users.php') ? 'active-sidebar' : '' ?>">
+            <i class="bi bi-people me-2"></i> Data Pengguna
+        </a>
+
+        <!-- Penjualan & Promosi -->
+        <small class="text-uppercase text-muted px-2 pt-3 pb-1 fw-bold fs-7" style="font-size: 11px;">PENJUALAN & PROMOSI</small>
+        <a href="orders.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'orders.php') ? 'active-sidebar' : '' ?>">
+            <i class="bi bi-cart-check me-2"></i> Data Transaksi
+        </a>
+        <a href="vouchers.php" class="list-group-item list-group-item-action bg-transparent text-white rounded mb-1 <?= ($current_page == 'vouchers.php') ? 'active-sidebar' : '' ?>">
+            <i class="bi bi-ticket-perforated me-2"></i> Data Voucher & Diskon
+        </a>
 
         <!-- Pengaturan & Lainnya -->
         <small class="text-uppercase text-muted px-2 pt-3 pb-1 fw-bold fs-7" style="font-size: 11px;">PENGATURAN</small>
