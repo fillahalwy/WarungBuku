@@ -5,6 +5,8 @@
 # Database connection config (if moved to separate file)
 koneksi.php
 connection.php
+connect.php
+connections.php
 
 # ============================================================
 # Uploaded Files
@@ -12,6 +14,7 @@ connection.php
 
 # Product images uploaded through the admin panel
 assets/images/product/
+assets/images/book
 
 # ============================================================
 # OS & Editor Artifacts
@@ -80,4 +83,4 @@ package-lock.json
 .env.*.local
 config.local.php
 
-assets/images/book
+
